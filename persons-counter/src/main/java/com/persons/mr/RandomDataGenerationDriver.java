@@ -1,36 +1,26 @@
 package com.persons.mr;
 
-import java.io.BufferedReader;
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.FileReader;
-import java.io.IOException;
-import java.net.URI;
-import java.security.InvalidParameterException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Random;
-
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.filecache.DistributedCache;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
-import org.apache.hadoop.mapreduce.InputFormat;
-import org.apache.hadoop.mapreduce.InputSplit;
-import org.apache.hadoop.mapreduce.Job;
-import org.apache.hadoop.mapreduce.JobContext;
-import org.apache.hadoop.mapreduce.RecordReader;
-import org.apache.hadoop.mapreduce.TaskAttemptContext;
+import org.apache.hadoop.mapreduce.*;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.apache.hadoop.util.GenericOptionsParser;
 
+import java.io.*;
+import java.security.InvalidParameterException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+import java.util.logging.Logger;
+
 public class RandomDataGenerationDriver {
 
-    public static class RandomStackOverflowInputFormat extends
+    public static class RandomInputFormat extends
             InputFormat<Text, NullWritable> {
 
         public static final String NUM_MAP_TASKS = "random.generator.map.tasks";
@@ -58,9 +48,10 @@ public class RandomDataGenerationDriver {
         public RecordReader<Text, NullWritable> createRecordReader(
                 InputSplit split, TaskAttemptContext context)
                 throws IOException, InterruptedException {
-            // Create a new RandomStackoverflowRecordReader and initialize it
-            RandomStackoverflowRecordReader rr = new RandomStackoverflowRecordReader();
+            // Create a new RandomRecordReader and initialize it
+            RandomRecordReader rr = new RandomRecordReader();
             rr.initialize(split, context);
+
             return rr;
         }
 
@@ -72,13 +63,14 @@ public class RandomDataGenerationDriver {
             job.getConfiguration().setInt(NUM_RECORDS_PER_TASK, i);
         }
 
-        public static void setRandomWordList(Job job, Path file) {
-            DistributedCache.addCacheFile(file.toUri(), job.getConfiguration());
+        public static void setRandomWordList(Job job, String[] files) {
+            job.getConfiguration().setStrings("input.files", files);
         }
 
-        public static class RandomStackoverflowRecordReader extends
+        public static class RandomRecordReader extends
                 RecordReader<Text, NullWritable> {
 
+            Logger logger = Logger.getLogger("RecordReader");
             private int numRecordsToCreate = 0;
             private int createdRecords = 0;
             private Text key = new Text();
@@ -93,6 +85,7 @@ public class RandomDataGenerationDriver {
             private SimpleDateFormat frmt = new SimpleDateFormat(
                     "yyyy-MM-dd");
 
+
             @Override
             public void initialize(InputSplit split, TaskAttemptContext context)
                     throws IOException, InterruptedException {
@@ -106,32 +99,37 @@ public class RandomDataGenerationDriver {
                             + " is not set.");
                 }
 
-                // Get the list of random words from the DistributedCache
-                URI[] files = DistributedCache.getCacheFiles(context
-                        .getConfiguration());
 
+                String[] files = context.getConfiguration().getStrings("input.files");
                 if (files.length == 0) {
                     throw new InvalidParameterException(
                             "Random word list not set in cache.");
                 } else {
                     // Read the list of random words into a list
-                    BufferedReader firstNameRdr = new BufferedReader(new FileReader(files[0].toString()));
-                    BufferedReader lastNameRdr = new BufferedReader(new FileReader(files[1].toString()));
-                    BufferedReader birthPlaceRdr = new BufferedReader(new FileReader(files[2].toString()));
+
+                    FileSystem fs = FileSystem.get(context.getConfiguration());
+                    BufferedReader firstNameRdr = new BufferedReader(new InputStreamReader(fs.open(new Path(files[0]))));
+                    BufferedReader lastNameRdr = new BufferedReader(new InputStreamReader(fs.open(new Path(files[1]))));
+                    BufferedReader birthPlaceRdr = new BufferedReader(new InputStreamReader(fs.open(new Path(files[2]))));
 
                     String line1;
                     String line2;
                     String line3;
 
+
+
                     while ((line1 = firstNameRdr.readLine()) != null) {
+
                         randomFirstNames.add(line1);
                     }
 
-                    while ((line2 = firstNameRdr.readLine()) != null) {
+                    while ((line2 = lastNameRdr.readLine()) != null) {
+
                         randomLastNames.add(line2);
                     }
 
-                    while ((line3 = firstNameRdr.readLine()) != null) {
+                    while ((line3 = birthPlaceRdr.readLine()) != null) {
+
                         randomBirthPlaces.add(line3);
                     }
 
@@ -140,9 +138,18 @@ public class RandomDataGenerationDriver {
                     birthPlaceRdr.close();
 
                     if ((randomLastNames.size() == 0) || (randomFirstNames.size() == 0) || (randomBirthPlaces.size() == 0)) {
-                        throw new IOException("A random word list is empty");
+                        throw new IOException("A random word list is empty: " +randomFirstNames.size()
+                        + " " + randomLastNames.size() + " " + randomBirthPlaces.size());
                     }
+
+                    printer();
                 }
+            }
+
+            public void printer(){
+                System.out.println(randomFirstNames);
+                System.out.println(randomLastNames);
+                System.out.println(randomBirthPlaces);
             }
 
             @Override
@@ -184,6 +191,8 @@ public class RandomDataGenerationDriver {
                     bldr.append(randomFirstNames.get(Math.abs(rndm.nextInt())
                             % randomFirstNames.size()));
                 }
+
+                System.out.println("a rnd first name: " + bldr.toString());
                 return bldr.toString();
             }
 
@@ -195,6 +204,7 @@ public class RandomDataGenerationDriver {
                     bldr.append(randomBirthPlaces.get(Math.abs(rndm.nextInt())
                             % randomBirthPlaces.size()));
                 }
+                System.out.println("a rnd place: " +bldr.toString());
                 return bldr.toString();
             }
 
@@ -206,6 +216,7 @@ public class RandomDataGenerationDriver {
                     bldr.append(randomLastNames.get(Math.abs(rndm.nextInt())
                             % randomLastNames.size()));
                 }
+                System.out.println("a rnd last name: " + bldr.toString());
                 return bldr.toString();
             }
 
@@ -267,9 +278,20 @@ public class RandomDataGenerationDriver {
     public static void main(String[] args) throws Exception {
 
         Configuration conf = new Configuration();
-        conf.set("mapred.job.tracker", "localhost:8888");
+//        conf.set("mapred.job.tracker", "localhost:8888");
         String[] otherArgs = new GenericOptionsParser(conf, args)
                 .getRemainingArgs();
+
+        FileSystem hdfs = FileSystem.get(conf);
+        System.out.println("cwd: " + hdfs.getWorkingDirectory().toString());
+        String cwd = hdfs.getWorkingDirectory().toString()+ "/";
+        Path out = new Path(cwd+args[4]);
+        System.out.println("OUTPUT file: " + out.toString());
+        if(hdfs.isDirectory(out) || hdfs.isFile(out)){
+            System.out.println("cleaning up output dir...");
+            hdfs.delete(out, true);
+        }
+
 
         if (otherArgs.length != 5) {
             System.err
@@ -292,14 +314,12 @@ public class RandomDataGenerationDriver {
 
         job.setNumReduceTasks(0);
 
-        job.setInputFormatClass(RandomStackOverflowInputFormat.class);
+        job.setInputFormatClass(RandomInputFormat.class);
 
-        RandomStackOverflowInputFormat.setNumMapTasks(job, numMapTasks);
-        RandomStackOverflowInputFormat.setNumRecordPerTask(job, numRecordsPerTask);
+        RandomInputFormat.setNumMapTasks(job, numMapTasks);
+        RandomInputFormat.setNumRecordPerTask(job, numRecordsPerTask);
 
-        RandomStackOverflowInputFormat.setRandomWordList(job, firstNames);
-        RandomStackOverflowInputFormat.setRandomWordList(job, lastNames);
-        RandomStackOverflowInputFormat.setRandomWordList(job, locations);
+        RandomInputFormat.setRandomWordList(job, new String[]{cwd+firstNames.toString(), cwd+lastNames.toString(), cwd+locations.toString()});
 
         TextOutputFormat.setOutputPath(job, outputDir);
 
@@ -307,5 +327,7 @@ public class RandomDataGenerationDriver {
         job.setOutputValueClass(NullWritable.class);
 
         System.exit(job.waitForCompletion(true) ? 0 : 2);
+
+
     }
 }
