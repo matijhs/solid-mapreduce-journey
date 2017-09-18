@@ -1,7 +1,7 @@
 package com.persons.mr;
 
+
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
@@ -14,6 +14,7 @@ import java.io.*;
 import java.security.InvalidParameterException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Random;
 import java.util.logging.Logger;
@@ -117,7 +118,6 @@ public class RandomDataGenerationDriver {
                     String line3;
 
 
-
                     while ((line1 = firstNameRdr.readLine()) != null) {
 
                         randomFirstNames.add(line1);
@@ -138,15 +138,14 @@ public class RandomDataGenerationDriver {
                     birthPlaceRdr.close();
 
                     if ((randomLastNames.size() == 0) || (randomFirstNames.size() == 0) || (randomBirthPlaces.size() == 0)) {
-                        throw new IOException("A random word list is empty: " +randomFirstNames.size()
-                        + " " + randomLastNames.size() + " " + randomBirthPlaces.size());
+                        throw new IOException("A random word list is empty: " + randomFirstNames.size()
+                                + " " + randomLastNames.size() + " " + randomBirthPlaces.size());
                     }
 
-                    printer();
                 }
             }
 
-            public void printer(){
+            public void printer() {
                 System.out.println(randomFirstNames);
                 System.out.println(randomLastNames);
                 System.out.println(randomBirthPlaces);
@@ -164,7 +163,10 @@ public class RandomDataGenerationDriver {
                     String firstName = getRandomFirstName();
                     String lastName = getRandomLastName();
                     String birthPlace = getRandomPlace();
-                    String birthDate = frmt.format(Math.abs(rndm.nextLong()));
+
+                    long max =0L;
+                    long min =1000000000000L;
+                    String birthDate = frmt.format(new Date((rndm.nextLong() % (max - min)) + min));
 
                     String randomRecord = firstName + "," + lastName + "," + birthPlace + "," + birthDate;
 
@@ -185,38 +187,28 @@ public class RandomDataGenerationDriver {
              */
             private String getRandomFirstName() {
                 StringBuilder bldr = new StringBuilder();
-                int numWords = Math.abs(rndm.nextInt()) % 30 + 1;
 
-                for (int i = 0; i < numWords; ++i) {
-                    bldr.append(randomFirstNames.get(Math.abs(rndm.nextInt())
-                            % randomFirstNames.size()));
-                }
+                bldr.append(randomFirstNames.get(Math.abs(rndm.nextInt())
+                        % randomFirstNames.size()));
 
-                System.out.println("a rnd first name: " + bldr.toString());
                 return bldr.toString();
             }
 
             private String getRandomPlace() {
                 StringBuilder bldr = new StringBuilder();
-                int numWords = Math.abs(rndm.nextInt()) % 30 + 1;
 
-                for (int i = 0; i < numWords; ++i) {
-                    bldr.append(randomBirthPlaces.get(Math.abs(rndm.nextInt())
-                            % randomBirthPlaces.size()));
-                }
-                System.out.println("a rnd place: " +bldr.toString());
+                bldr.append(randomBirthPlaces.get(Math.abs(rndm.nextInt())
+                        % randomBirthPlaces.size()));
+
                 return bldr.toString();
             }
 
             private String getRandomLastName() {
                 StringBuilder bldr = new StringBuilder();
-                int numWords = Math.abs(rndm.nextInt()) % 30 + 1;
 
-                for (int i = 0; i < numWords; ++i) {
-                    bldr.append(randomLastNames.get(Math.abs(rndm.nextInt())
-                            % randomLastNames.size()));
-                }
-                System.out.println("a rnd last name: " + bldr.toString());
+                bldr.append(randomLastNames.get(Math.abs(rndm.nextInt())
+                        % randomLastNames.size()));
+
                 return bldr.toString();
             }
 
@@ -272,6 +264,7 @@ public class RandomDataGenerationDriver {
 
     /**
      * Driver
+     *
      * @param args
      * @throws Exception
      */
@@ -284,10 +277,10 @@ public class RandomDataGenerationDriver {
 
         FileSystem hdfs = FileSystem.get(conf);
         System.out.println("cwd: " + hdfs.getWorkingDirectory().toString());
-        String cwd = hdfs.getWorkingDirectory().toString()+ "/";
-        Path out = new Path(cwd+args[4]);
+        String cwd = hdfs.getWorkingDirectory().toString() + "/";
+        Path out = new Path(cwd + args[4]);
         System.out.println("OUTPUT file: " + out.toString());
-        if(hdfs.isDirectory(out) || hdfs.isFile(out)){
+        if (hdfs.isDirectory(out) || hdfs.isFile(out)) {
             System.out.println("cleaning up output dir...");
             hdfs.delete(out, true);
         }
@@ -319,7 +312,7 @@ public class RandomDataGenerationDriver {
         RandomInputFormat.setNumMapTasks(job, numMapTasks);
         RandomInputFormat.setNumRecordPerTask(job, numRecordsPerTask);
 
-        RandomInputFormat.setRandomWordList(job, new String[]{cwd+firstNames.toString(), cwd+lastNames.toString(), cwd+locations.toString()});
+        RandomInputFormat.setRandomWordList(job, new String[]{cwd + firstNames.toString(), cwd + lastNames.toString(), cwd + locations.toString()});
 
         TextOutputFormat.setOutputPath(job, outputDir);
 
